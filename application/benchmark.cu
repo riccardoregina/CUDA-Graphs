@@ -5,29 +5,29 @@
 #include <random>
 #include <chrono>
 
-void run_benchmark(const Config& cfg) {
-    // Inizializzazione Dati Host
+std::vector<float> initialize_host_data(const Config& cfg) {
     std::vector<float> h_data(cfg.num_threads);
     std::mt19937 rng(cfg.seed);
     std::uniform_real_distribution<float> dist(0.0f, 0.1f);
     for (int i = 0; i < cfg.num_threads; ++i) {
         h_data[i] = dist(rng);
     }
+    return h_data;
+}
 
-    // Allocazione GPU e copia Dati
+float* allocate_and_copy_to_gpu(const Config& cfg, const std::vector<float>& h_data) {
     float* d_data = nullptr;
     CUDA_CHECK(cudaMalloc(&d_data, cfg.num_threads * sizeof(float)));
     CUDA_CHECK(cudaMemcpy(d_data, h_data.data(), cfg.num_threads * sizeof(float), cudaMemcpyHostToDevice));
+    return d_data;
+}
 
-    // Calcolo del layout della Grid
-    int threads_per_block = 1024;
-    int blocks_per_grid = (cfg.num_threads + threads_per_block - 1) / threads_per_block;
+void calculate_grid_layout(const Config& cfg, int& threads_per_block, int& blocks_per_grid) {
+    threads_per_block = 1024;
+    blocks_per_grid = (cfg.num_threads + threads_per_block - 1) / threads_per_block;
+}
 
-    std::vector<double> graph_creation_times;
-    std::vector<double> exec_times;
-    int gpu_memory_mib = -1;
-
-    // Modalità di Esecuzione e Profiling
+void execute_and_profile(const Config& cfg, float* d_data, int threads_per_block, int blocks_per_grid, std::vector<double>& graph_creation_times, std::vector<double>& exec_times, int& gpu_memory_mib) {
     for (int r = 0; r < cfg.repetitions; ++r) {
         double graph_creation_time = 0.0;
         double exec_time = 0.0;
@@ -106,6 +106,21 @@ void run_benchmark(const Config& cfg) {
             CUDA_CHECK(cudaGraphDestroy(graph));
         }
     }
+}
+
+void run_benchmark(const Config& cfg) {
+    std::vector<float> h_data = initialize_host_data(cfg);
+
+    float* d_data = allocate_and_copy_to_gpu(cfg, h_data);
+
+    int threads_per_block, blocks_per_grid;
+    calculate_grid_layout(cfg, threads_per_block, blocks_per_grid);
+
+    std::vector<double> graph_creation_times;
+    std::vector<double> exec_times;
+    int gpu_memory_mib = -1;
+
+    execute_and_profile(cfg, d_data, threads_per_block, blocks_per_grid, graph_creation_times, exec_times, gpu_memory_mib);
 
     CUDA_CHECK(cudaFree(d_data));
 

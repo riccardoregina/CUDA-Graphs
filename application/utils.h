@@ -7,7 +7,6 @@
 #include <cstdlib>
 #include <cuda_runtime.h>
 
-// Macro per il controllo degli errori CUDA
 #define CUDA_CHECK(call) \
     do { \
         cudaError_t err = call; \
