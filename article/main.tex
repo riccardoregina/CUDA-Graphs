@@ -1,0 +1,202 @@
+\documentclass[10pt,twocolumn]{article}
+
+\usepackage{abstract}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{colortbl}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{float}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\usepackage[utf8]{inputenc}
+\usepackage{longtable}
+\usepackage{microtype}
+\usepackage{multirow}
+\usepackage{parskip}
+\usepackage{setspace}
+\usepackage{tabularx}
+\usepackage{tcolorbox}
+\usepackage{times}
+\usepackage{titlesec}
+\usepackage{url}
+\usepackage{xcolor}
+
+\tcbuselibrary{skins,breakable}
+
+\newcommand{\set}[1]{\left\{ #1 \right\}}
+
+\newtcolorbox{rqanswer}[2][]{
+    colback=gray!30, % Background color
+    colframe=black!50, % Frame color
+    fonttitle=\bfseries,
+    title=#2,
+    breakable,
+    enhanced,
+    attach boxed title to top left={xshift=5mm, yshift=-2mm},
+    boxed title style={colback=black!80, % Title box background color
+        arc=3pt, % Radius of the rounded corners of the title box
+        boxrule=0.5pt % Border thickness for the title box
+    },
+    #1
+}
+
+\titleformat{\section}{\normalfont\large\bfseries}{\thesection}{1em}{}
+\titleformat{\subsection}{\normalfont\normalsize\bfseries}{\thesubsection}{1em}{}
+
+\pagestyle{fancy}
+\fancyhf{}
+\renewcommand{\headrulewidth}{0.4pt}
+\fancyhead[L]{\small\textit{Kernel Batching with CUDA Graphs - Review}}
+\fancyhead[R]{\small\thepage}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=black,
+  citecolor=black,
+  urlcolor=black
+}
+
+\title{\textbf{Kernel Batching with CUDA Graphs - Review}}
+
+\author{Giuseppe Di Martino, Riccardo Regina}
+
+\date{\today}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{fancy}
+
+% ---------------------------------------------------------------
+\begin{abstract}
+% ---------------------------------------------------------------
+\noindent
+%TODO: abstract.
+\end{abstract}
+
+% ---------------------------------------------------------------
+\section{Introduction}
+% ---------------------------------------------------------------
+The goal of this work is to replicate and validate the findings of `Boosting Performance of Iterative Applications on GPUs: Kernel Batching with CUDA Graphs' \cite{10974864} presented during \emph{2025 33rd Euromicro International Conference on Parallel, Distributed, and Network-Based Processing (PDP)}.
+
+Reproducing published research is a foundational pillar of the scientific method that extends far beyond merely checking for errors. 
+Even within rigorously peer-reviewed literature, independent replication is essential to verify the robustness and generalizability of proposed methods, ensuring that reported outcomes hold true across varying architectures, software environments, and edge cases. 
+%The rigorous process of reproduction often uncovers undocumented implementation details or implicit assumptions that are crucial for practical application, thereby bridging the gap between theoretical frameworks and real-world deployment.
+While GPUs performance has been increasing in the last years, causing the actual execution time of individual computational kernels to shrink, the time required to launch a kernel from the host has remained steady. 
+A vast majority of scientific HPC applications operate iteratively. Simulations relying on time-stepping—such as computational fluid dynamics (CFD), electromagnetic solvers, and particle pushers—execute the same sequence of computations repeatedly.
+For these reasons, NVIDIA introduced \texttt{CUDA Graphs}\footnote{https://docs.nvidia.com/cuda/cuda-programming-guide/04-special-topics/cuda-graphs.html} in CUDA 10, released in 2018.
+A \texttt{CUDA Graph} groups multiple kernel launches into a single workload, by moving the launching responsibility from the host to the device, hence resolving the host bottleneck.
+The mentioned article first introduces a performance model and then proposes a strategy for porting HPC applications to \texttt{CUDA Graphs}.
+
+% ---------------------------------------------------------------
+\section{CUDA Graphs}
+% ---------------------------------------------------------------
+% Talk about CUDA Graphs and its concepts like nodes and edges
+CUDA Graphs provide a paradigm shift in how work is submitted to NVIDIA GPUs. 
+Traditionally, the host CPU dispatches operations, such as kernel executions and memory transfers, sequentially to CUDA streams. 
+When these individual operations are short-lived, the overhead of the CPU launching each task and synchronizing streams can exceed the actual computation time on the GPU, leaving the device underutilized. 
+CUDA Graphs mitigate this by allowing the programmer to define a series of operations and their dependencies in advance, effectively offloading the scheduling burden from the host to the device.
+
+Fundamentally, a \texttt{CUDA Graph} is a directed acyclic graph (DAG) where nodes represent individual operations and edges denote execution dependencies. 
+A node can encapsulate various types of work, including compute kernels, memory copies, memory allocations, host functions, or even entire child graphs. 
+The directed edges strictly dictate the execution order: a dependent node will only commence execution once all of its upstream dependencies have fully completed. 
+This explicit declaration of dependencies exposes the maximum inherent concurrency to the CUDA runtime, allowing independent nodes to execute in parallel on the hardware without requiring complex multi-stream synchronization mechanisms on the host CPU.
+
+The lifecycle of a CUDA Graph typically consists of three distinct phases: definition, instantiation, and execution. 
+
+During the \emph{definition} phase, the topology of the graph is constructed. 
+This can be achieved either explicitly via API calls (adding nodes and edges programmatically) or implicitly using stream capture. 
+Stream capture provides a highly convenient mechanism for existing applications, as it records a sequence of standard stream-based operations into a graph without requiring a complete rewrite of the codebase.
+However, manual creation gives more control over the graph configuration, which is crucial to assess its performance.
+For this reason, the article only considers manual graph creation.
+
+Once defined, the graph undergoes \emph{instantiation}. Instantiation is a heavy-weight operation that compiles the graph template into a highly optimized, executable format (\texttt{cudaGraphExec\_t}). During this phase, the CUDA driver performs validation, optimizes the scheduling, and pre-allocates necessary resources. Because instantiation incurs significant overhead, it is typically performed only once during the initialization phase of an application, strictly outside the critical computational loop.
+
+Finally, the instantiated graph enters the \emph{execution} phase. The entire pre-compiled workflow can be launched repeatedly with a single API call (\texttt{cudaGraphLaunch}). This launch mechanism bypasses the traditional per-kernel host overhead, reducing latency and improving throughput for repetitive workloads.
+
+Furthermore, for iterative HPC applications where simulation parameters might change between time steps, CUDA provides efficient update mechanisms: instead of destroying and recreating the graph, which would trigger the costly instantiation phase, developers can update the parameters (such as kernel arguments or grid dimensions) of specific nodes within an existing executable graph. 
+This ensures that the application maintains the low-latency benefits of graph execution even as the state of the simulation evolves over time.
+
+% ---------------------------------------------------------------
+\section{The Unrolling Strategy}
+% ---------------------------------------------------------------
+% Explain the unrolling strategy. This strategy divides the workload across multiple graphs since too small graphs would only add overhead and too big graphs would add a much too big creation overhead. Adopt the mini-batch naming to explain this i.e. a mini-batch is an iteration batch.
+Constructing a graph that contains only one or two kernel nodes provides negligible performance benefits, as the operations execute in a simple sequence without parallelization advantages. 
+Conversely, mapping every single kernel iteration of the application's lifespan into one massive CUDA Graph would result in an excessively large structure, incurring an unsustainable graph creation overhead.
+To resolve this trade-off, the proposed unrolling strategy groups a specific number of consecutive kernel launches into a localized subset, which we will refer to as a mini-batch (termed an "iteration batch" in the original article). This mini-batch is then unrolled within a single, static CUDA Graph. The application's main control loop is subsequently modified to iterate over this newly constructed graph rather than launching individual kernels. This structural approach closely mirrors the concept of loop unrolling utilized in standard compiler optimizations.\footnote{Loop unrolling is a compiler optimization technique that expands the body of a loop to execute multiple iterations within a single loop cycle, hence reducing the loop iterations and the overhead associated with loop control mechanisms (e.g., condition evaluation, branching, and counter updates) and allows to execute the unrolled operations in parallel, if independent. The unrolling mechanism faces a trade-off between binary size and execution speed, since unrolling the whole loop could lead to excessive memory usage.}
+
+The primary challenge in deploying this methodology lies in identifying the optimal mini-batch size. Designing the graph requires a precise balance between the performance gains achieved during execution and the added temporal overhead of graph creation. 
+This challenge will be addresses in the next section.
+
+% ---------------------------------------------------------------
+\section{Performance Model}
+% ---------------------------------------------------------------
+% Explain the performance model with clear naming and reproduces illustrations
+When using CUDA Graphs inside a program, the overall execution time, \(T\), can be divided into the graph creation time, \(T_C\), and the actual execution time, \(T_E\):
+\begin{equation}
+\label{eq:overall_time}
+T = T_C + T_E.
+\end{equation}
+Suppose we have to execute the same kernel \(I_k\) times. We want to find the optimal mini-batch size, \(S\). The ratio between the two will give us the number of iterations, \(I\), to be created:
+\begin{equation}
+\label{eq:iteration_num}
+I = \frac{I_k}{S}.
+\end{equation}
+The graph creation time, \(T_C\), consists of a fixed graph creation overhead, \(b_C\), and the cost of creating a graph, \(k_C\), multiplied by its size (the minibatch size), \(S\):
+\begin{equation}
+T_C = k_C \cdot S + b_C.
+\end{equation}
+The actual execution time, \(T_E\), consists of the first launch time, \(T_l\), the overall time of a single graph, \(T_{eg}\), multiplied by the number of iterations, \(I\), and the time between a graph execution and another, \(T_a\), multiplied by the number of iterations minus 1 (since there is no other graph launch after the last one):
+\begin{equation}
+\label{eq:exec_time}
+T_{E} = T_{l} + T_{eg}\cdot I + T_{a}(I-1)
+\end{equation}
+where \(T_{eg}\) equals the execution time of a single kernel, \(T_k\), times the mini-batch size, \(S\), and the time between a kernel execution (within the same graph) and another, \(T_i\), multiplied by the mini-batch size minus 1 (since there is no other kernel launch inside the graph after the last one): 
+\begin{equation}
+\label{eq:graph_time}
+T_{eg} = T_{k}S + T_{i}(S-1)
+\end{equation}
+Expanding \(T_{eg}\) in \ref{eq:exec_time} according to \ref{eq:graph_time} and then substituing \ref{eq:iteration_num} into \ref{eq:exec_time}, we obtain:
+\begin{equation}
+\label{eq:exec_time_v2}
+T_E = \frac{I_{k}(T_{a}-T_{i})}{S} + I_{k}(T_{k} + T_{i}) - T_{a} + T_{l} 
+\end{equation}
+
+Recall that we are interested in finding the optimal value for \(S\). So, we now show that \(S\) is the only variable in \ref{eq:exec_time_v2}.
+Since we fix the number of kernel executions, \(I_k\), upfront, it is a constant.
+\(T_a\) does not depend on the mini-batch size just like \(T_i\).
+The kernel execution time, \(T_k\), is assumed fixed.
+Lastly, the launch time of the first graph execution, \(T_l\), does not depend on the mini-batch size.
+
+Hence, we can define two constants \(a=I_{k}(T_{a}-T_{i})\) and \(b=I_{k}(T_{k} + T_{i}) - T_{a} + T_{l}\), we can rewrite \ref{eq:exec_time_v2} as:
+\begin{equation}
+\label{eq:exec_time_v3}
+T_E = \frac{a}{S} + b
+\end{equation}
+Since it has been observed that (when not using CUDA Graphs) the time between one kernel execution and another, \(T_b\) is close to \(T_a\), we can see \(a\) as the time we gain between a kernel execution and another by using CUDA Graphs. 
+
+For large \(I_k\) we have that 
+\[-T_a + T_l \ll I_k(T_k + T_i) \]
+and so the term \(-T_a + T_l\) can be ignored.
+So, we can see \(b\) as the total execution time of the iterations, excluding the time between an iteration and another.
+Hence, \(b\) can be seen as a lower bound on the iterations execution time where all the kernels are part of a single, large graph.
+
+In the results section, we will show the values found for the four parameters by fitting the overall execution time curve obtained by varying the mini-batch size, \(S\).
+
+%TODO: insert vocabulary table containing the base symbols and their meaning
+
+%TODO: add figure representing the comparison between the unrolling strategy and the execution without cuda graphs
+
+\clearpage
+
+% ---------------------------------------------------------------
+% References
+% ---------------------------------------------------------------
+\bibliography{references}{}
+\bibliographystyle{plain}
+
+\end{document}
