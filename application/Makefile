@@ -1,7 +1,7 @@
 NVCC = nvcc
 NVCC_FLAGS = -O3 -std=c++11
 
-TARGET = benchmark
+TARGET = application.out
 
 SRCS = main.cu benchmark.cu kernel.cu utils.cpp
 

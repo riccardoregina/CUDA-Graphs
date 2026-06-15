@@ -8,7 +8,7 @@
 void run_benchmark(const Config& cfg) {
     // Inizializzazione Dati Host
     std::vector<float> h_data(cfg.num_threads);
-    std::mt19random_engine rng(cfg.seed);
+    std::mt19937 rng(cfg.seed);
     std::uniform_real_distribution<float> dist(0.0f, 0.1f);
     for (int i = 0; i < cfg.num_threads; ++i) {
         h_data[i] = dist(rng);
