@@ -24,7 +24,19 @@
 \usepackage{titlesec}
 \usepackage{url}
 \usepackage{xcolor}
+\usepackage{listings}
 
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue}\bfseries,
+    stringstyle=\color{red},
+    commentstyle=\color{green!60!black},
+    showstringspaces=false,
+    breaklines=true,
+    frame=single,
+    rulecolor=\color{black!30},
+    backgroundcolor=\color{gray!5}
+}
 \tcbuselibrary{skins,breakable}
 
 \newcommand{\set}[1]{\left\{ #1 \right\}}
@@ -130,7 +142,7 @@ Conversely, mapping every single kernel iteration of the application's lifespan 
 To resolve this trade-off, the proposed unrolling strategy groups a specific number of consecutive kernel launches into a localized subset, which we will refer to as a mini-batch (termed an "iteration batch" in the original article). This mini-batch is then unrolled within a single, static CUDA Graph. The application's main control loop is subsequently modified to iterate over this newly constructed graph rather than launching individual kernels. This structural approach closely mirrors the concept of loop unrolling utilized in standard compiler optimizations.\footnote{Loop unrolling is a compiler optimization technique that expands the body of a loop to execute multiple iterations within a single loop cycle, hence reducing the loop iterations and the overhead associated with loop control mechanisms (e.g., condition evaluation, branching, and counter updates) and allows to execute the unrolled operations in parallel, if independent. The unrolling mechanism faces a trade-off between binary size and execution speed, since unrolling the whole loop could lead to excessive memory usage.}
 
 The primary challenge in deploying this methodology lies in identifying the optimal mini-batch size. Designing the graph requires a precise balance between the performance gains achieved during execution and the added temporal overhead of graph creation. 
-This challenge will be addresses in the next section.
+This challenge will be addressed in the next section. A visual comparison between the standard sequential kernel execution and the proposed unrolling strategy is illustrated in Figure \ref{fig:unrolling_vs_no_unrolling}.
 
 % ---------------------------------------------------------------
 \section{Performance Model}
@@ -185,11 +197,126 @@ and so the term \(-T_a + T_l\) can be ignored.
 So, we can see \(b\) as the total execution time of the iterations, excluding the time between an iteration and another.
 Hence, \(b\) can be seen as a lower bound on the iterations execution time where all the kernels are part of a single, large graph.
 
-In the results section, we will show the values found for the four parameters by fitting the overall execution time curve obtained by varying the mini-batch size, \(S\).
+In the results section, we will show the values found for the four parameters by fitting the overall execution time curve obtained by varying the mini-batch size, \(S\). A comprehensive summary of the base symbols used in this model and their meanings is provided in Table \ref{tab:vocabulary}.
 
-%TODO: insert vocabulary table containing the base symbols and their meaning
+\begin{table}[h]
+    \centering
+    \caption{Vocabulary of base symbols used in the performance model}
+    \label{tab:vocabulary}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{lp{6cm}}
+        \toprule
+        \textbf{Symbol} & \textbf{Description} \\
+        \midrule
+        \(T\) & Overall execution time \\
+        \(T_C\) & Graph creation time \\
+        \(T_E\) & Actual execution time \\
+        \(I_k\) & Total number of times the kernel must be executed \\
+        \(S\) & Mini-batch size (number of nodes per graph) \\
+        \(I\) & Total number of iterations (\(I_k / S\)) \\
+        \(b_C\) & Fixed graph creation overhead \\
+        \(k_C\) & Cost of creating a single graph node \\
+        \(T_l\) & Launch time of the first graph execution \\
+        \(T_{eg}\) & Overall execution time of a single graph \\
+        \(T_a\) & Time between one graph execution and another \\
+        \(T_k\) & Execution time of a single kernel \\
+        \(T_i\) & Time between kernel executions within the same graph \\
+        \bottomrule
+    \end{tabular}
+\end{table}
 
-%TODO: add figure representing the comparison between the unrolling strategy and the execution without cuda graphs
+\begin{figure*}[htbp]
+\centering
+\includegraphics[width=\textwidth]{../assets/figure_1.pdf}
+\caption{Comparison between the unrolling strategy and the execution without cuda graphs}
+\label{fig:unrolling_vs_no_unrolling}
+\end{figure*}
+
+
+% ---------------------------------------------------------------
+\section{Experimental Setup}
+% ---------------------------------------------------------------
+To evaluate the proposed unrolling strategy, a custom CUDA application and a suite of test scripts were developed. The entire experimental setup can be divided into three main components: the core skeleton application, the automation scripts for data extraction, and the curve fitting procedure for performance modeling.
+
+\subsection{Skeleton Application}
+The main program serves as a skeleton application that accepts various configuration parameters via command-line arguments. This modular design allows for flexible experimentation across different workload sizes and graph configurations. The supported parameters are:
+\begin{itemize}
+    \item \texttt{--num\_threads} (\texttt{-t}): The total number of CUDA threads to launch, which directly defines the grid dimension for the problem size.
+    \item \texttt{--inner\_iterations} (\texttt{-i}): The number of iterations executed internally within a single kernel thread, used to arbitrarily increase the arithmetic intensity of individual kernels.
+    \item \texttt{--mini\_batch\_size} (\texttt{-k}): The number of kernel nodes encapsulated within a single CUDA Graph (the size of the unrolled mini-batch).
+    \item \texttt{--outer\_iterations} (\texttt{-o}): The total number of times the generated graph (or the sequence of standard kernels) is launched.
+    \item \texttt{--repetitions} (\texttt{-r}): The number of times the entire experiment is repeated. This is used to compute statistically robust metrics like mean and standard deviation for the execution times.
+    \item \texttt{--seed} (\texttt{-s}): The random seed used to initialize the input dataset on the host memory.
+    \item \texttt{--use\_graph} (\texttt{-g}): A boolean flag (0 or 1) to toggle between the standard stream-based execution and the optimized CUDA Graph execution.
+    % \item \texttt{--output} (\texttt{-f}): The file path where the extracted benchmark metrics are appended in CSV format.
+    % \item \texttt{--print} (\texttt{-p}): An optional flag to print the parsed configuration parameters to standard output.
+\end{itemize}
+
+The application logic focuses on iteratively executing the kernel. To implement the CUDA Graphs approach, the application explicitly constructs the graph using the CUDA Graph API. The graph is initialized using \texttt{cudaGraphCreate}, followed by a loop that adds the specified number of kernel nodes (\texttt{mini\_batch\_size}) to the graph via \texttt{cudaGraphAddKernelNode}. To maintain the sequential nature of the iterations, each new kernel node is configured to strictly depend on the previously added node. Once the topology is fully defined, the graph is instantiated into an executable format and uploaded to the device.
+
+A synthetic snippet illustrating the core graph creation logic is provided in Figure \ref{fig:graph_creation}.
+
+\begin{figure*}[htbp]
+\begin{lstlisting}[language=C++]
+cudaGraphCreate(&graph, 0);
+cudaGraphNode_t prev_node = nullptr;
+
+for (int i = 0; i < mini_batch_size; ++i) {
+    cudaGraphNode_t current_node;
+    // ... set up kernelParams ...
+    
+    std::vector<cudaGraphNode_t> deps;
+    if (prev_node != nullptr) {
+        deps.push_back(prev_node);
+    }
+    
+    cudaGraphAddKernelNode(&current_node, graph, 
+                           deps.empty() ? nullptr : deps.data(), 
+                           deps.size(), &kernelParams);
+    prev_node = current_node;
+}
+
+cudaGraphInstantiate(&graphExec, graph, NULL, NULL, 0);
+cudaGraphUpload(graphExec, 0);
+\end{lstlisting}
+\caption{Synthetic snippet illustrating the core graph creation logic with the CUDA API.}
+\label{fig:graph_creation}
+\end{figure*}
+
+\subsection{Automation Scripts}
+To extract the performance data systematically, a dedicated suite of bash scripts was developed. These scripts automate the execution of the skeleton application over a sweeping range of parameters, ensuring reproducible and consistent measurements. The main scripts used for the experimental evaluation are:
+\begin{itemize}
+    \item \texttt{run\_increase\_nodes.sh}: This script is designed to measure the overhead of graph creation and execution depending on its size. It progressively increases the number of nodes (the mini-batch size) while keeping the total computational work constant, iterating across different thread counts to evaluate the scaling behavior.
+    \item \texttt{run\_increase\_iterations.sh}: This script focuses on evaluating the overall speed-up provided by the unrolling strategy. Fixing the mini-batch size to an optimal value, it scales the number of total iterations and executes both the graph-enabled and the baseline versions of the application to gather comparative data.
+    % \item \texttt{run\_sanity\_check.sh}: A utility script used to quickly validate the application's correctness, ensuring that the benchmark logic works as expected before running the more time-consuming data extraction tasks.
+    % \item \texttt{profiler.sh}: This script instruments the application using NVIDIA Nsight Systems (\texttt{nsys}). It captures the hardware-level timeline of the GPU activity, which is crucial for visually verifying that the kernel batching and the graph dependencies are correctly enforced by the CUDA runtime.
+\end{itemize}
+These scripts collect the execution and creation times for each configuration and store the output in structured CSV files for the subsequent analysis.
+
+\subsection{Performance Modeling and Curve Fitting}
+Regarding the data analysis, the collected timings were used to comprehensively validate the proposed performance model. At a conceptual level, we performed a non-linear curve fitting procedure not only on the graph execution times but also on the graph creation times against the varying mini-batch sizes. 
+
+This mathematical approach allowed us to accurately identify the optimal constants for the respective model equations described previously. Specifically, for the execution time $T_E$, the fitting process determines the parameters $a$ (which represents the accumulated time gained between kernel executions, as defined in Equation \ref{eq:exec_time_v3}) and $b$ (the theoretical lower bound of the execution time). For the graph creation time $T_C$, the fitting identifies the constant time per node, $k_C$, and the fixed baseline overhead, $b_C$. 
+Once these fitting parameters were successfully extracted from the independent fits of creation and execution times, they were combined and used to derive the function for the total execution time ($T = T_C + T_E$), strictly following the overarching theoretical performance model.
+
+Finally, by evaluating these modeled functions, we derived and compared two distinct optimal sizes for the mini-batch. The theoretical ideal value is mathematically computed by finding the global minimum of the total time function. This is achieved by setting the first derivative of the total time $T$ with respect to the mini-batch size $S$ equal to zero:
+\[ \frac{dT}{dS} = k_C - \frac{a}{S^2} = 0 \implies S_{opt} = \sqrt{\frac{a}{k_C}} \]
+where $a$ is the execution time gain parameter and $k_C$ is the per-node creation cost. This theoretically calculated value was then compared to the actual real optimal value, which results directly from the minimum points of the empirical data. This comparison effectively verified the consistency of the model's predictions against the observed hardware behavior.
+
+\subsection{Hardware and Software Configurations}
+The benchmarking and profiling procedures were conducted across different hardware platforms to ensure the robustness and generalizability of the results. Specifically, the following three configurations were utilized:
+\begin{itemize}
+    \item \textbf{Configuration A}: An NVIDIA GeForce RTX 3070 GPU equipped with 8~GB of VRAM. The system utilized NVIDIA Display Driver version 610.43.02 and CUDA version 13.3.
+    \item \textbf{Configuration B}: An NVIDIA GeForce GTX 1060 GPU equipped with 6~GB of VRAM. This system utilized NVIDIA Driver version 580.142. Code compilation was performed using CUDA Toolkit version 12.6, running on a driver supporting up to CUDA API version 13.0.
+    \item \textbf{Configuration C}: An NVIDIA Tesla T4 GPU equipped with 16~GB of VRAM. The environment was configured with NVIDIA Driver version 580.82.07 and CUDA version 13.0.
+\end{itemize}
+Configurations A and B correspond to the personal computing systems of the authors, whereas Configuration C was provisioned using the Google Colab cloud computing platform.
+
+
+% ---------------------------------------------------------------
+\section{Results}
+% ---------------------------------------------------------------
+
 
 \clearpage
 
