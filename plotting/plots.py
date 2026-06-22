@@ -32,7 +32,7 @@ def get_label(t):
 def plot_figure_2(csv_path='../application/output/output_increase_nodes.csv', output_dir='.'):
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
-        return
+        return []
         
     df = pd.read_csv(csv_path)
     # Filter for graph mode if multiple modes exist, assuming mode 1 is graph
@@ -43,6 +43,7 @@ def plot_figure_2(csv_path='../application/output/output_increase_nodes.csv', ou
     ax2 = ax1.twinx()
     
     threads = sorted(df['threads'].unique())
+    fit_params = []
     
     for i, t in enumerate(threads):
         df_t = df[df['threads'] == t].sort_values('mini_batch_size')
@@ -65,6 +66,25 @@ def plot_figure_2(csv_path='../application/output/output_increase_nodes.csv', ou
         
         ax2.bar(x + offset, y_bar, width=w, color=color, alpha=0.3, edgecolor='none', label=f"{label} (Mem)")
 
+        # Fit curve for Graph Creation
+        def fit_func_2(S, a, b):
+            return a * S + b
+            
+        try:
+            popt, _ = curve_fit(fit_func_2, x, y_line)
+            y_pred = fit_func_2(x, *popt)
+            mae = np.mean(np.abs(y_line - y_pred))
+            fit_params.append({
+                'Figure': 'Figure 2',
+                'Workload (Threads)': t,
+                'a': popt[0],
+                'b': popt[1],
+                'MAE': mae,
+                'Equation': 'T_C = a*S + b'
+            })
+        except Exception as e:
+            print(f"Could not fit curve for {label} in Figure 2: {e}")
+
     ax1.set_xlabel('mini_batch_size')
     ax1.set_ylabel('Graph Creation Time Mean (s)')
     ax2.set_ylabel('GPU Memory (MiB)')
@@ -78,11 +98,12 @@ def plot_figure_2(csv_path='../application/output/output_increase_nodes.csv', ou
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'figure_2.png'), dpi=300)
     plt.close()
+    return fit_params
 
 def plot_figure_3(csv_path='../application/output/output_increase_nodes.csv', output_dir='.'):
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
-        return
+        return []
         
     df = pd.read_csv(csv_path)
     if 'mode' in df.columns and 1 in df['mode'].unique():
@@ -93,7 +114,7 @@ def plot_figure_3(csv_path='../application/output/output_increase_nodes.csv', ou
     ax3 = ax1.twinx()
     
     # Crucial instruction: move the third axis outwards
-    ax3.spines['right'].set_position(('outward', 60))
+    ax3.spines['right'].set_position(('outward', 90))
     
     # Function to fit: T_E = a/S + b
     def fit_func(S, a, b):
@@ -101,6 +122,7 @@ def plot_figure_3(csv_path='../application/output/output_increase_nodes.csv', ou
 
     axes = [ax1, ax2, ax3]
     threads = sorted(df['threads'].unique())
+    fit_params = []
     
     ax1.set_xlabel('mini_batch_size')
     ax1.set_xscale('log')
@@ -126,6 +148,17 @@ def plot_figure_3(csv_path='../application/output/output_increase_nodes.csv', ou
             x_fit = np.logspace(np.log10(x.min()), np.log10(x.max()), 500)
             y_fit = fit_func(x_fit, *popt)
             ax.plot(x_fit, y_fit, color=color, linewidth=3, linestyle='-', label=f'{label} (Fitted)')
+            
+            y_pred = fit_func(x, *popt)
+            mae = np.mean(np.abs(y - y_pred))
+            fit_params.append({
+                'Figure': 'Figure 3',
+                'Workload (Threads)': t,
+                'a': popt[0],
+                'b': popt[1],
+                'MAE': mae,
+                'Equation': 'T_E = a/S + b'
+            })
         except Exception as e:
             print(f"Could not fit curve for {label}: {e}")
             
@@ -146,11 +179,12 @@ def plot_figure_3(csv_path='../application/output/output_increase_nodes.csv', ou
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'figure_3.png'), dpi=300)
     plt.close()
+    return fit_params
 
-def plot_figure_4(csv_path='../application/output/output_increase_nodes.csv', output_dir='.'):
+def plot_figure_4(params_2, params_3, csv_path='../application/output/output_increase_nodes.csv', output_dir='.'):
     if not os.path.exists(csv_path):
         print(f"File not found: {csv_path}")
-        return
+        return []
         
     df = pd.read_csv(csv_path)
     if 'mode' in df.columns:
@@ -167,8 +201,10 @@ def plot_figure_4(csv_path='../application/output/output_increase_nodes.csv', ou
         return A * S + B / S + C
         
     threads = sorted(df['threads'].unique())
+    fit_params_4 = []
     
     for t in threads:
+        # df_t = df[(df['threads'] == t) & (df['mini_batch_size'] <= 2500)].sort_values('mini_batch_size')
         df_t = df[df['threads'] == t].sort_values('mini_batch_size')
         x = df_t['mini_batch_size'].values
         y_total = df_t['Total_Time'].values
@@ -185,11 +221,23 @@ def plot_figure_4(csv_path='../application/output/output_increase_nodes.csv', ou
         ax.plot(x, ratio_emp, marker='o', linestyle='--', color=color, alpha=0.5, label=f'{label} (Data)')
         ax.fill_between(x, ratio_emp - ratio_err, ratio_emp + ratio_err, color=color, alpha=0.2)
         
-        # Fit curve
+        # Combine parameters from Figure 2 and Figure 3 instead of fitting
         try:
-            p0 = [1e-6, 1e-2, 1e-2]
-            popt, _ = curve_fit(fit_func, x, y_total, p0=p0, bounds=(0, np.inf), maxfev=10000)
-            A, B, C = popt
+            p2_t = next((p for p in (params_2 or []) if p.get('Workload (Threads)') == t), None)
+            p3_t = next((p for p in (params_3 or []) if p.get('Workload (Threads)') == t), None)
+            
+            if p2_t is None or p3_t is None:
+                raise ValueError("Missing fitting parameters from Figure 2 or 3")
+                
+            a_c = p2_t['a']
+            b_c = p2_t['b']
+            
+            a_e = p3_t['a']
+            b_e = p3_t['b']
+            
+            A = a_c
+            B = a_e
+            C = b_c + b_e
             
             # Theoretical min occurs at S = sqrt(B/A)
             S_min = np.sqrt(B / A)
@@ -200,8 +248,25 @@ def plot_figure_4(csv_path='../application/output/output_increase_nodes.csv', ou
             ratio_fit = y_fit / min_teorico
             
             ax.plot(x_fit, ratio_fit, color=color, linewidth=3, label=f'{label} (Fitted)')
+            
+            y_pred = fit_func(x, A, B, C)
+            mae = np.mean(np.abs(y_total - y_pred))
+            idx_min_real = np.argmin(y_total)
+            s_min_real = x[idx_min_real]
+            
+            fit_params_4.append({
+                'Figure': 'Figure 4',
+                'Workload (Threads)': t,
+                'a': A,
+                'b': B,
+                'C': C,
+                'MAE': mae,
+                'S_min_teorico': S_min,
+                'S_min_reale': s_min_real,
+                'Equation': 'T_tot = a*S + b/S + C'
+            })
         except Exception as e:
-            print(f"Could not fit curve for {label}: {e}")
+            print(f"Could not plot combined curve for {label}: {e}")
             
     ax.set_xlabel('mini_batch_size')
     ax.set_ylabel('Ratio (Total Time / Min Total Time)')
@@ -210,6 +275,7 @@ def plot_figure_4(csv_path='../application/output/output_increase_nodes.csv', ou
     plt.tight_layout()
     plt.savefig(os.path.join(output_dir, 'figure_4.png'), dpi=300)
     plt.close()
+    return fit_params_4
 
 def plot_figure_6(csv_base_path='../application/output/output_kernels_increase_it.csv', 
                   csv_graph_path='../application/output/output_graph_increase_it.csv', 
@@ -275,15 +341,28 @@ if __name__ == '__main__':
     csv_graph = os.path.join(app_output_dir, 'output_graph_increase_it.csv')
     
     print("Generating Figure 2...")
-    plot_figure_2(csv_path=csv_nodes, output_dir=output_dir)
+    params_2 = plot_figure_2(csv_path=csv_nodes, output_dir=output_dir)
     
     print("Generating Figure 3...")
-    plot_figure_3(csv_path=csv_nodes, output_dir=output_dir)
+    params_3 = plot_figure_3(csv_path=csv_nodes, output_dir=output_dir)
     
     print("Generating Figure 4...")
-    plot_figure_4(csv_path=csv_nodes, output_dir=output_dir)
+    params_4 = plot_figure_4(params_2, params_3, csv_path=csv_nodes, output_dir=output_dir)
     
     print("Generating Figure 6...")
     plot_figure_6(csv_base_path=csv_kernels, csv_graph_path=csv_graph, output_dir=output_dir)
-    
+
+    all_params = (params_2 or []) + (params_3 or [])
+    if all_params:
+        params_df = pd.DataFrame(all_params)
+        params_csv_path = os.path.join(output_dir, 'fitting_parameters_fig2_3.csv')
+        params_df.to_csv(params_csv_path, index=False)
+        print(f"Fitting parameters saved to {params_csv_path}")
+
+    if params_4:
+        params_4_df = pd.DataFrame(params_4)
+        params_4_csv_path = os.path.join(output_dir, 'fitting_parameters_fig4.csv')
+        params_4_df.to_csv(params_4_csv_path, index=False)
+        print(f"Figure 4 fitting parameters saved to {params_4_csv_path}")
+
     print(f"All plots have been saved to {output_dir}")
