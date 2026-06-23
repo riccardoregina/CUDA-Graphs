@@ -25,6 +25,7 @@
 \usepackage{url}
 \usepackage{xcolor}
 \usepackage{listings}
+\usepackage{subcaption}
 
 \lstset{
     basicstyle=\ttfamily\small,
@@ -87,7 +88,7 @@
 \begin{abstract}
 % ---------------------------------------------------------------
 \noindent
-%TODO: abstract.
+This paper presents a replication study and performance validation of the kernel batching strategy utilizing CUDA Graphs, originally proposed to optimize iterative high-performance computing (HPC) applications. By grouping multiple kernel launches into a single executable graph, the traditional host-side dispatch overhead is significantly mitigated. We evaluate the proposed unrolling strategy and its theoretical performance model across three distinct GPU architectures under varying workload intensities and mini-batch sizes. Our findings strongly corroborate the qualitative aspects of the original model, including the linear growth of graph creation costs and the presence of a ``U-shaped'' execution time curve that yields an optimal batch size between 50 and 100 nodes for light workloads. However, we observe notable quantitative deviations: our implementations exhibited a substantially higher performance speed-up (up to 2.5x, compared to the previously reported 1.5x) for light workloads, and a proportionally smaller memory footprint for the instantiated graphs. These results underscore that the tangible benefits of CUDA Graphs are highly dependent on the underlying hardware environment, where systems with higher host-to-device latencies can experience significantly greater relative performance gains.
 \end{abstract}
 
 % ---------------------------------------------------------------
@@ -236,18 +237,18 @@ In the results section, we will show the values found for the four parameters by
 % ---------------------------------------------------------------
 \section{Experimental Setup}
 % ---------------------------------------------------------------
-To evaluate the proposed unrolling strategy, a custom CUDA application and a suite of test scripts were developed. The entire experimental setup can be divided into three main components: the core skeleton application, the automation scripts for data extraction, and the curve fitting procedure for performance modeling.
+To evaluate the proposed unrolling strategy, a custom CUDA application and a suite of test scripts were developed\footnote{\url{https://github.com/riccardoregina/CUDA-Graphs}}. The entire experimental setup can be divided into three main components: the core skeleton application, the automation scripts for data extraction, and the curve fitting procedure for performance modeling.
 
 \subsection{Skeleton Application}
 The main program serves as a skeleton application that accepts various configuration parameters via command-line arguments. This modular design allows for flexible experimentation across different workload sizes and graph configurations. The supported parameters are:
 \begin{itemize}
-    \item \texttt{--num\_threads} (\texttt{-t}): The total number of CUDA threads to launch, which directly defines the grid dimension for the problem size.
-    \item \texttt{--inner\_iterations} (\texttt{-i}): The number of iterations executed internally within a single kernel thread, used to arbitrarily increase the arithmetic intensity of individual kernels.
-    \item \texttt{--mini\_batch\_size} (\texttt{-k}): The number of kernel nodes encapsulated within a single CUDA Graph (the size of the unrolled mini-batch).
-    \item \texttt{--outer\_iterations} (\texttt{-o}): The total number of times the generated graph (or the sequence of standard kernels) is launched.
-    \item \texttt{--repetitions} (\texttt{-r}): The number of times the entire experiment is repeated. This is used to compute statistically robust metrics like mean and standard deviation for the execution times.
-    \item \texttt{--seed} (\texttt{-s}): The random seed used to initialize the input dataset on the host memory.
-    \item \texttt{--use\_graph} (\texttt{-g}): A boolean flag (0 or 1) to toggle between the standard stream-based execution and the optimized CUDA Graph execution.
+    \item \texttt{---num\_threads} (\texttt{-t}): The total number of CUDA threads to launch, which directly defines the grid dimension for the problem size.
+    \item \texttt{---inner\_iterations} (\texttt{-i}): The number of iterations executed internally within a single kernel thread, used to arbitrarily increase the arithmetic intensity of individual kernels.
+    \item \texttt{---mini\_batch\_size} (\texttt{-k}): The number of kernel nodes encapsulated within a single CUDA Graph (the size of the unrolled mini-batch).
+    \item \texttt{---outer\_iterations} (\texttt{-o}): The total number of times the generated graph (or the sequence of standard kernels) is launched.
+    \item \texttt{---repetitions} (\texttt{-r}): The number of times the entire experiment is repeated. This is used to compute statistically robust metrics like mean and standard deviation for the execution times.
+    \item \texttt{---seed} (\texttt{-s}): The random seed used to initialize the input dataset on the host memory.
+    \item \texttt{---use\_graph} (\texttt{-g}): A boolean flag (0 or 1) to toggle between the standard stream-based execution and the optimized CUDA Graph execution.
     % \item \texttt{--output} (\texttt{-f}): The file path where the extracted benchmark metrics are appended in CSV format.
     % \item \texttt{--print} (\texttt{-p}): An optional flag to print the parsed configuration parameters to standard output.
 \end{itemize}
@@ -310,14 +311,143 @@ The benchmarking and profiling procedures were conducted across different hardwa
     \item \textbf{Configuration B}: An NVIDIA GeForce GTX 1060 GPU equipped with 6~GB of VRAM. This system utilized NVIDIA Driver version 580.142. Code compilation was performed using CUDA Toolkit version 12.6, running on a driver supporting up to CUDA API version 13.0.
     \item \textbf{Configuration C}: An NVIDIA Tesla T4 GPU equipped with 16~GB of VRAM. The environment was configured with NVIDIA Driver version 580.82.07 and CUDA version 13.0.
 \end{itemize}
-Configurations A and B correspond to the personal computing systems of the authors, whereas Configuration C was provisioned using the Google Colab cloud computing platform.
+Configuration A and Configuration B correspond to the personal computing systems of the authors, whereas Configuration C was provisioned using the Google Colab cloud computing platform.
+To ensure that the benchmarking results on the personal computers were not distorted by background display rendering tasks, the graphical user interface was explicitly disabled. This was achieved by executing the \texttt{sudo systemctl isolate multi-user.target} command prior to testing, thereby dedicating the GPUs exclusively to the application workloads.
 
 
 % ---------------------------------------------------------------
 \section{Results}
 % ---------------------------------------------------------------
+In this section, we present the empirical results obtained from our benchmark and critically compare them against the findings of the original publication. While the qualitative behavior described by the authors is largely confirmed, we observed significant quantitative divergences, particularly regarding the overall speed-up, which warrant a detailed analysis.
 
+\subsection{Graph Creation Cost and Memory}
 
+\begin{figure*}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/3070/figure_2.png}
+        \caption{RTX 3070}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/1060/figure_2.png}
+        \caption{GTX 1060}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/t4/figure_2.png}
+        \caption{Tesla T4}
+    \end{subfigure}
+    \caption{Graph creation time and memory footprint as a function of the mini-batch size across different GPU architectures.}
+    \label{fig:creation_time}
+\end{figure*}
+
+Consistent with the original paper, our results (Figure \ref{fig:creation_time}) demonstrate that the graph creation time grows linearly with respect to the mini-batch size (the number of nodes). While the authors observed this linearity up to approximately 2,500 nodes, our tests confirm that this linear trend is strictly maintained even for significantly larger graphs, reaching up to 10,000 nodes. 
+
+Regarding memory consumption, the authors noted a linear increase corresponding to the number of nodes in the graph. Our data exhibits the exact same trend. However, the absolute memory footprint in our tests (approximately 300~MiB for 10,000 nodes at \(10^7\) threads for Configuration A) is proportionally lower than the values reported in the paper (which reached 700-800~MiB at only 2,500 nodes). This discrepancy suggests that the tested version of the CUDA runtime manages graph nodes more efficiently.
+
+Finally, the paper highlights that heavier workloads (such as \(10^7\) threads) incur a slightly higher creation time due to the overhead of uploading the instantiated graph to the GPU. 
+This is not true for our Configuration A, and Configuration B where the creation time seems mostly indipendent from the worrkload. Instead, for Configuration C, the creation time increases with the workload confirming original paper's claim.
+
+\subsection{Execution Time}
+
+\begin{figure*}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/3070/figure_3.png}
+        \caption{RTX 3070}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/1060/figure_3.png}
+        \caption{GTX 1060}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/t4/figure_3.png}
+        \caption{Tesla T4}
+    \end{subfigure}
+    \caption{Graph execution time versus batch size across different thread configurations and GPU architectures.}
+    \label{fig:execution_time}
+\end{figure*}
+
+The theoretical model predicts that the execution time (depicted in Figure \ref{fig:execution_time}) should rapidly decrease as the graph size increases, eventually converging towards a lower asymptote following a "U-shaped" curve. Our execution time data clearly demonstrates this convergence, successfully validating the overall theoretical model with one exception for \(10^6\) threads workload.
+In fact for all of our configurations a noticeable spike in execution time occurs between batch sizes of 30 and 100, drastically deviating from the fitted curve. Performance analysis revealed a non-monotonic behavior for this intermediate workload (\(10^6\) threads). While for small batches (\(S < 16\)) the use of CUDA Graphs drastically reduces the CPU launch overhead, for larger graph sizes (\(S > 20\)) a slight performance degradation is observed. This phenomenon can be attributed to exceeding the internal dispatch threshold of the NVIDIA driver, which changes the graph submission heuristic, introducing architectural micro-latencies that become visible only in regimes of high L2 cache saturation.
+
+Another notable divergence emerges at very large graph dimensions. The original paper points out that for batch sizes exceeding 2,500 nodes, the execution time ceases to follow the theoretical model and begins to rise due to resource exhaustion. Curiously, our implementation appears significantly more resilient: our execution times (especially for the \(10^3\) and \(10^7\) configurations) remain stable and do not exhibit a marked increase even at a 10,000 node batch size.
+
+\subsection{Optimal Batch Size}
+
+\begin{figure*}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/3070/figure_4.png}
+        \caption{RTX 3070}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/1060/figure_4.png}
+        \caption{GTX 1060}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/t4/figure_4.png}
+        \caption{Tesla T4}
+    \end{subfigure}
+    \caption{Normalized total execution time to determine the optimal batch size across different GPU architectures.}
+    \label{fig:optimal_size}
+\end{figure*}
+
+The original authors identified that the optimal iteration batch size (the minimum point of the curve) typically falls within the range of 50 to 100 nodes. Looking at our data for the \(10^3\) thread workload (Figure \ref{fig:optimal_size}), the "U-shaped" curve is extremely clear, and the minimum point is located exactly within this predicted range, definitively validating the authors' observation.
+
+Furthermore, a key conclusion of the paper is that optimizing the graph size becomes less critical as the workload itself becomes larger. Our measurements for the \(10^6\) and \(10^7\) configurations demonstrate this perfectly: the execution ratio remains almost flat (equal to 1) across the entire X-axis. This indicates that for computationally heavy kernels, grouping launches into larger or smaller graphs makes negligible difference to the overall computational efficiency.
+
+\subsection{Speed-up Relative to Baseline}
+
+\begin{figure*}[htbp]
+    \centering
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/3070/figure_6.png}
+        \caption{RTX 3070}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/1060/figure_6.png}
+        \caption{GTX 1060}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.32\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{../assets/t4/figure_6.png}
+        \caption{Tesla T4}
+    \end{subfigure}
+    \caption{Speed-up of the unrolling strategy relative to the baseline execution without CUDA Graphs across different GPU architectures.}
+    \label{fig:speedup}
+\end{figure*}
+
+The most interesting divergence between our reproduction and the original publication concerns the speed-up metric, as illustrated in Figure \ref{fig:speedup}. 
+
+For light workloads, the paper reports a speed-up of over 1.4x (peaking near 1.5x). In stark contrast, our tests demonstrate a dramatically higher speed-up for the light workload (\(10^3\) threads), stabilizing consistently between 2.3x and 2.5x. This implies that on our specific hardware platform and CUDA version, the traditional CPU-side kernel launch overhead is proportionally much slower, or that the CUDA Graph infrastructure is capable of executing nodes with significantly less latency compared to the NVIDIA A100 system tested by the authors.
+
+Conversely, for the heaviest workloads (\(10^6\) and \(10^7\) threads), the authors obtained only a slight speed-up or no slowdown. Our graphs display a completely flat speed-up of exactly 1.0x for these configurations. We reach the "break-even" point, confirming the theoretical expectation: for large workloads, the kernel execution time completely dominates the launch overhead, resulting in neither apparent benefits nor penalties when using CUDA Graphs.
+
+% ---------------------------------------------------------------
+\section{Conclusion}
+% ---------------------------------------------------------------
+In conclusion, our reproduction fully validates the performance model formulated in the paper: the adoption of CUDA Graphs for iterative loops is effective because the transition time to the next node within a graph is strictly lower than the launch time of a new kernel from the host. 
+
+However, our results, particularly the 2.5x speed-up for light workloads, suggest that the tangible benefits of "Kernel Batching" are heavily dependent on the execution environment (e.g., host CPU, PCIe driver, and GPU architecture). If the host machine suffers from higher CPU-to-GPU latency than the high-end hardware used by the authors, bypassing the CPU via CUDA Graphs can yield performance gains that are substantially higher than those originally published.
 \clearpage
 
 % ---------------------------------------------------------------
