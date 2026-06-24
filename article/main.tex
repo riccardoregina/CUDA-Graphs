@@ -290,7 +290,6 @@ To extract the performance data systematically, a dedicated suite of bash script
 \begin{itemize}
     \item \texttt{run\_increase\_nodes.sh}: This script is designed to measure the overhead of graph creation and execution depending on its size. It progressively increases the number of nodes (the mini-batch size) while keeping the total computational work constant, iterating across different thread counts to evaluate the scaling behavior.
     \item \texttt{run\_increase\_iterations.sh}: This script focuses on evaluating the overall speed-up provided by the unrolling strategy. Fixing the mini-batch size to an optimal value, it scales the number of total iterations and executes both the graph-enabled and the baseline versions of the application to gather comparative data.
-    \item \texttt{run\_sanity\_check.sh}: A utility script used to quickly validate the application's correctness, ensuring that the benchmark logic works as expected before running the more time-consuming data extraction tasks.
     \item \texttt{profiler.sh}: This script instruments the application using NVIDIA Nsight Systems (\texttt{nsys}). It captures the hardware-level timeline of the GPU activity, which is crucial for visually verifying that the kernel batching and the graph dependencies are correctly enforced by the CUDA runtime.
 \end{itemize}
 These scripts collect the execution and creation times for each configuration and store the output in structured CSV files for the subsequent analysis.
@@ -312,7 +311,7 @@ The benchmarking and profiling procedures were conducted across different hardwa
     \item \textbf{Configuration B}: An NVIDIA GeForce GTX 1060 GPU equipped with 6~GB of VRAM. This system utilized NVIDIA Driver version 580.142. Code compilation was performed using CUDA Toolkit version 12.6, running on a driver supporting up to CUDA API version 13.0.
     \item \textbf{Configuration C}: An NVIDIA Tesla T4 GPU equipped with 16~GB of VRAM. The environment was configured with NVIDIA Driver version 580.82.07 and CUDA version 13.0.
 \end{itemize}
-Configuration A and Configuration B correspond to the personal computing systems of the authors, whereas Configuration C was provisioned using the Google Colab cloud computing platform.
+\textbf{Configuration A} and \textbf{Configuration B} correspond to the personal computing systems of the authors, whereas \textbf{Configuration C} was provisioned using the Google Colab cloud computing platform.
 To ensure that the benchmarking results on the personal computers were not distorted by background display rendering tasks, the graphical user interface was explicitly disabled. This was achieved by executing the \texttt{sudo systemctl isolate multi-user.target} command prior to testing, thereby dedicating the GPUs exclusively to the application workloads.
 
 
@@ -367,10 +366,10 @@ This visual evidence substantiates the core assumption \(T_i < T_a\), which was 
 
 Consistent with the original paper, our results (Figure \ref{fig:creation_time}) demonstrate that the graph creation time grows linearly with respect to the mini-batch size (the number of nodes). While the authors observed this linearity up to approximately 2,500 nodes, our tests confirm that this linear trend is strictly maintained even for significantly larger graphs, reaching up to 10,000 nodes. 
 
-Regarding memory consumption, the authors noted a linear increase corresponding to the number of nodes in the graph. Our data exhibits the exact same trend. However, the absolute memory footprint in our tests (approximately 300~MiB for 10,000 nodes at \(10^7\) threads for Configuration A) is proportionally lower than the values reported in the paper (which reached 700-800~MiB at only 2,500 nodes). This discrepancy suggests that the tested version of the CUDA runtime manages graph nodes more efficiently.
+Regarding memory consumption, the authors noted a linear increase corresponding to the number of nodes in the graph. Our data exhibits the exact same trend. However, the absolute memory footprint in our tests (approximately 300~MiB for 10,000 nodes at \(10^7\) threads for \textbf{Configuration A}) is proportionally lower than the values reported in the paper (which reached 700-800~MiB at only 2,500 nodes). This discrepancy suggests that the tested version of the CUDA runtime manages graph nodes more efficiently.
 
 Finally, the paper highlights that heavier workloads (such as \(10^7\) threads) incur a slightly higher creation time due to the overhead of uploading the instantiated graph to the GPU. 
-This is not true for our Configuration A, and Configuration B where the creation time seems mostly indipendent from the worrkload. Instead, for Configuration C, the creation time increases with the workload confirming original paper's claim.
+This is not true for our \textbf{Configuration A} and \textbf{Configuration B} where the creation time seems mostly indipendent from the worrkload. Instead, for \textbf{Configuration C}, the creation time increases with the workload confirming original paper's claim.
 
 \subsection{Execution Time}
 
