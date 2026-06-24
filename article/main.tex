@@ -199,7 +199,7 @@ and so the term \(-T_a + T_l\) can be ignored.
 So, we can see \(b\) as the total execution time of the iterations, excluding the time between an iteration and another.
 Hence, \(b\) can be seen as a lower bound on the iterations execution time where all the kernels are part of a single, large graph.
 
-In the results section, we will show the values found for the four parameters by fitting the overall execution time curve obtained by varying the mini-batch size, \(S\). A comprehensive summary of the base symbols used in this model and their meanings is provided in Table \ref{tab:vocabulary}.
+In the results section, we present the empirical values found for these parameters by fitting the curves for creation time (Table \ref{tab:fit_creation}), actual execution time (Table \ref{tab:fit_execution}), and total execution time (Table \ref{tab:fit_total}) across different mini-batch sizes, \(S\). A comprehensive summary of the base symbols used in this model and their meanings is provided in Table \ref{tab:vocabulary}.
 
 \begin{table}[h]
     \centering
@@ -297,8 +297,8 @@ These scripts collect the execution and creation times for each configuration an
 \subsection{Performance Modeling and Curve Fitting}
 Regarding the data analysis, the collected timings were used to comprehensively validate the proposed performance model. At a conceptual level, we performed a non-linear curve fitting procedure not only on the graph execution times but also on the graph creation times against the varying mini-batch sizes. 
 
-This mathematical approach allowed us to accurately identify the optimal constants for the respective model equations described previously. Specifically, for the execution time $T_E$, the fitting process determines the parameters $a$ (which represents the accumulated time gained between kernel executions, as defined in Equation \ref{eq:exec_time_v3}) and $b$ (the theoretical lower bound of the execution time). For the graph creation time $T_C$, the fitting identifies the constant time per node, $k_C$, and the fixed baseline overhead, $b_C$. 
-Once these fitting parameters were successfully extracted from the independent fits of creation and execution times, they were combined and used to derive the function for the total execution time ($T = T_C + T_E$), strictly following the overarching theoretical performance model.
+This mathematical approach allowed us to accurately identify the optimal constants for the respective model equations described previously. Specifically, for the execution time $T_E$ (values in Table \ref{tab:fit_execution}), the fitting process determines the parameters $a$ (which represents the accumulated time gained between kernel executions, as defined in Equation \ref{eq:exec_time_v3}) and $b$ (the theoretical lower bound of the execution time). For the graph creation time $T_C$ (values in Table \ref{tab:fit_creation}), the fitting identifies the constant time per node, $k_C$, and the fixed baseline overhead, $b_C$. 
+Once these fitting parameters were successfully extracted from the independent fits of creation and execution times, they were combined and used to derive the function for the total execution time ($T = T_C + T_E$) (values in Table \ref{tab:fit_total}), strictly following the overarching theoretical performance model.
 
 Finally, by evaluating these modeled functions, we derived and compared two distinct optimal sizes for the mini-batch. The theoretical ideal value is mathematically computed by finding the global minimum of the total time function. This is achieved by setting the first derivative of the total time $T$ with respect to the mini-batch size $S$ equal to zero:
 \[ \frac{dT}{dS} = k_C - \frac{a}{S^2} = 0 \implies S_{opt} = \sqrt{\frac{a}{k_C}} \]
@@ -364,7 +364,25 @@ This visual evidence substantiates the core assumption \(T_i < T_a\), which was 
     \label{fig:creation_time}
 \end{figure*}
 
-Consistent with the original paper, our results (Figure \ref{fig:creation_time}) demonstrate that the graph creation time grows linearly with respect to the mini-batch size (the number of nodes). While the authors observed this linearity up to approximately 2,500 nodes, our tests confirm that this linear trend is strictly maintained even for significantly larger graphs, reaching up to 10,000 nodes. 
+\begin{table}[htbp]
+    \centering
+    \caption{Fitting parameters for Graph Creation Time ($T_C = a \cdot S + b$) obtained from \textbf{Configuration A}}
+    \label{tab:fit_creation}
+    \renewcommand{\arraystretch}{1.2}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{rccc}
+        \toprule
+        \textbf{Workload} & \textbf{\(a\)} & \textbf{\(b\)} & \textbf{MAE} \\
+        \midrule
+        \(10^3\) & $2.64 \times 10^{-6}$ & $-2.70 \times 10^{-4}$ & $4.23 \times 10^{-4}$ \\
+        \(10^6\) & $2.64 \times 10^{-6}$ & $-2.76 \times 10^{-4}$ & $4.49 \times 10^{-4}$ \\
+        \(10^7\) & $2.59 \times 10^{-6}$ & $-2.56 \times 10^{-4}$ & $4.28 \times 10^{-4}$ \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+Consistent with the original paper, our results (Figure \ref{fig:creation_time}) demonstrate that the graph creation time grows linearly with respect to the mini-batch size (the number of nodes). The detailed fitting parameters for the creation time on the RTX 3070 architecture are presented in Table \ref{tab:fit_creation}. While the authors observed this linearity up to approximately 2,500 nodes, our tests confirm that this linear trend is strictly maintained even for significantly larger graphs, reaching up to 10,000 nodes. 
 
 Regarding memory consumption, the authors noted a linear increase corresponding to the number of nodes in the graph. Our data exhibits the exact same trend. However, the absolute memory footprint in our tests (approximately 300~MiB for 10,000 nodes at \(10^7\) threads for \textbf{Configuration A}) is proportionally lower than the values reported in the paper (which reached 700-800~MiB at only 2,500 nodes). This discrepancy suggests that the tested version of the CUDA runtime manages graph nodes more efficiently.
 
@@ -402,7 +420,25 @@ This is not true for our \textbf{Configuration A} and \textbf{Configuration B} w
     \label{fig:execution_time}
 \end{figure*}
 
-The theoretical model predicts that the execution time (depicted in Figure \ref{fig:execution_time}) should rapidly decrease as the graph size increases, eventually converging towards a lower asymptote following a "U-shaped" curve. Our execution time data clearly demonstrates this convergence, successfully validating the overall theoretical model with one exception for \(10^6\) threads workload.
+\begin{table}[htbp]
+    \centering
+    \caption{Fitting parameters for Graph Execution Time ($T_E = a/S + b$) obtained from \textbf{Configuration A}}
+    \label{tab:fit_execution}
+    \renewcommand{\arraystretch}{1.2}
+    \resizebox{\columnwidth}{!}{%
+    \begin{tabular}{rccc}
+        \toprule
+        \textbf{Workload} & \textbf{\(a\)} & \textbf{\(b\)} & \textbf{MAE} \\
+        \midrule
+        \(10^3\) & $1.16 \times 10^{-2}$ & $8.46 \times 10^{-3}$ & $3.92 \times 10^{-4}$ \\
+        \(10^6\) & $1.89 \times 10^{-6}$ & $9.87 \times 10^{-2}$ & $1.02 \times 10^{-3}$ \\
+        \(10^7\) & $5.21 \times 10^{-3}$ & $2.05 \times 10^{0}$ & $3.08 \times 10^{-4}$ \\
+        \bottomrule
+    \end{tabular}%
+    }
+\end{table}
+
+The theoretical model predicts that the execution time (depicted in Figure \ref{fig:execution_time}) should rapidly decrease as the graph size increases, eventually converging towards a lower asymptote following a "U-shaped" curve. Table \ref{tab:fit_execution} reports the fitting parameters obtained from the execution time data on the RTX 3070, showing the extracted coefficients for the execution time model. Our execution time data clearly demonstrates this convergence, successfully validating the overall theoretical model with one exception for \(10^6\) threads workload.
 In fact for all of our configurations a noticeable spike in execution time occurs between batch sizes of 30 and 100, drastically deviating from the fitted curve. Performance analysis revealed a non-monotonic behavior for this intermediate workload (\(10^6\) threads). While for small batches (\(S < 16\)) the use of CUDA Graphs drastically reduces the CPU launch overhead, for larger graph sizes (\(S > 20\)) a slight performance degradation is observed. This phenomenon can be attributed to exceeding the internal dispatch threshold of the NVIDIA driver, which changes the graph submission heuristic, introducing architectural micro-latencies that become visible only in regimes of high L2 cache saturation.
 
 Another notable divergence emerges at very large graph dimensions. The original paper points out that for batch sizes exceeding 2,500 nodes, the execution time ceases to follow the theoretical model and begins to rise due to resource exhaustion. Curiously, our implementation appears significantly more resilient: our execution times (especially for the \(10^3\) and \(10^7\) configurations) remain stable and do not exhibit a marked increase even at a 10,000 node batch size.
@@ -438,7 +474,23 @@ Another notable divergence emerges at very large graph dimensions. The original 
     \label{fig:optimal_size}
 \end{figure*}
 
-The original authors identified that the optimal iteration batch size (the minimum point of the curve) typically falls within the range of 50 to 100 nodes. Looking at our data for the \(10^3\) thread workload (Figure \ref{fig:optimal_size}), the "U-shaped" curve is extremely clear, and the minimum point is located exactly within this predicted range, definitively validating the authors' observation.
+\begin{table*}[htbp]
+    \centering
+    \caption{Fitting parameters for Total Execution Time ($T_{tot} = a \cdot S + b/S + C$) obtained from \textbf{Configuration A}}
+    \label{tab:fit_total}
+    \renewcommand{\arraystretch}{1.2}
+    \begin{tabular}{rcccccc}
+        \toprule
+        \textbf{Workload} & \textbf{\(a\)} & \textbf{\(b\)} & \textbf{\(C\)} & \textbf{MAE} & \textbf{\(S_{opt}\) (theoretical)} & \textbf{\(S_{opt}\) (empirical)} \\
+        \midrule
+        \(10^3\) & $2.64 \times 10^{-6}$ & $1.16 \times 10^{-2}$ & $8.19 \times 10^{-3}$ & $5.55 \times 10^{-4}$ & 66.10 & 50 \\
+        \(10^6\) & $2.64 \times 10^{-6}$ & $1.89 \times 10^{-6}$ & $9.84 \times 10^{-2}$ & $1.03 \times 10^{-3}$ & 0.85 & 16 \\
+        \(10^7\) & $2.59 \times 10^{-6}$ & $5.21 \times 10^{-3}$ & $2.05 \times 10^{0}$ & $6.01 \times 10^{-4}$ & 44.88 & 80 \\
+        \bottomrule
+    \end{tabular}
+\end{table*}
+
+The original authors identified that the optimal iteration batch size (the minimum point of the curve) typically falls within the range of 50 to 100 nodes. The parameters derived from fitting the total execution time, along with a comparison between the theoretical and empirical optimal batch sizes, are summarized in Table \ref{tab:fit_total}. Looking at our data for the \(10^3\) thread workload (Figure \ref{fig:optimal_size}), the "U-shaped" curve is extremely clear, and the minimum point is located exactly within this predicted range, definitively validating the authors' observation.
 
 Furthermore, a key conclusion of the paper is that optimizing the graph size becomes less critical as the workload itself becomes larger. Our measurements for the \(10^6\) and \(10^7\) configurations demonstrate this perfectly: the execution ratio remains almost flat (equal to 1) across the entire X-axis. This indicates that for computationally heavy kernels, grouping launches into larger or smaller graphs makes negligible difference to the overall computational efficiency.
 
