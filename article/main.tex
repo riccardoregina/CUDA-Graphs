@@ -228,7 +228,7 @@ In the results section, we will show the values found for the four parameters by
 
 \begin{figure*}[htbp]
 \centering
-\includegraphics[width=\textwidth]{../assets/figure_1.pdf}
+\includegraphics[width=\textwidth]{figures/figure_1.pdf}
 \caption{Comparison between the unrolling strategy and the execution without cuda graphs}
 \label{fig:unrolling_vs_no_unrolling}
 \end{figure*}
@@ -324,22 +324,28 @@ In this section, we present the empirical results obtained from our benchmark an
 
 \begin{figure*}[htbp]
     \centering
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/3070/figure_2.png}
         \caption{RTX 3070}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/1060/figure_2.png}
         \caption{GTX 1060}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/t4/figure_2.png}
         \caption{Tesla T4}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/figure_2.pdf}
+        \caption{Original Paper Results}
     \end{subfigure}
     \caption{Graph creation time and memory footprint as a function of the mini-batch size across different GPU architectures.}
     \label{fig:creation_time}
@@ -356,22 +362,28 @@ This is not true for our Configuration A, and Configuration B where the creation
 
 \begin{figure*}[htbp]
     \centering
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/3070/figure_3.png}
         \caption{RTX 3070}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/1060/figure_3.png}
         \caption{GTX 1060}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/t4/figure_3.png}
         \caption{Tesla T4}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/figure_3.pdf}
+        \caption{Original Paper Results}
     \end{subfigure}
     \caption{Graph execution time versus batch size across different thread configurations and GPU architectures.}
     \label{fig:execution_time}
@@ -386,22 +398,28 @@ Another notable divergence emerges at very large graph dimensions. The original 
 
 \begin{figure*}[htbp]
     \centering
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/3070/figure_4.png}
         \caption{RTX 3070}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/1060/figure_4.png}
         \caption{GTX 1060}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/t4/figure_4.png}
         \caption{Tesla T4}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/figure_4.pdf}
+        \caption{Original Paper Results}
     \end{subfigure}
     \caption{Normalized total execution time to determine the optimal batch size across different GPU architectures.}
     \label{fig:optimal_size}
@@ -415,22 +433,28 @@ Furthermore, a key conclusion of the paper is that optimizing the graph size bec
 
 \begin{figure*}[htbp]
     \centering
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/3070/figure_6.png}
         \caption{RTX 3070}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/1060/figure_6.png}
         \caption{GTX 1060}
     \end{subfigure}
     \hfill
-    \begin{subfigure}[b]{0.32\textwidth}
+    \begin{subfigure}[b]{0.49\textwidth}
         \centering
         \includegraphics[width=\textwidth]{../assets/t4/figure_6.png}
         \caption{Tesla T4}
+    \end{subfigure}
+    \hfill
+    \begin{subfigure}[b]{0.49\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{figures/figure_6.pdf}
+        \caption{Original Paper Results}
     \end{subfigure}
     \caption{Speed-up of the unrolling strategy relative to the baseline execution without CUDA Graphs across different GPU architectures.}
     \label{fig:speedup}

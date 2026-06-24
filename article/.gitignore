@@ -15,14 +15,14 @@
 *.pdf
 !_files/**/*
 
+# Version only PDFs in the figures directory
+!figures/*.pdf
+
 # BibTeX/BibLaTeX temporary files
 *.bbl
 *.bcf
 *.blg
 *.run.xml
-
-# PDF output (commentare se vuoi versionare i PDF)
-# *.pdf
 
 # Editor files
 .vscode/
