@@ -1,8 +1,6 @@
 #!/bin/bash
 
-OPTIMAL_NODES=100
-
 mkdir -p ../output
-rm -f ../output/profiler.csv ../output/report.nsys-rep ../output/report.sqlite
+rm -f ../output/profiler.csv ../output/report.nsys-rep ../output/report.sqlite ../output/report.qdstrm
 
-nsys profile --trace=cuda,osrt --stats=true -o ../output/report ../application.out -t 10000000 -k $OPTIMAL_NODES -o 40 -i 1 -r 10 -g 1 -f ../output/profiler.csv
+nsys profile --trace=cuda --stats=true -o ../output/report ../application.out -t 10 -k 10 -o 40 -i 10 -r 10 -g 1 -f ../output/profiler.csv
