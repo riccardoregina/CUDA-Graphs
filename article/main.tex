@@ -312,8 +312,8 @@ The benchmarking and profiling procedures were conducted across different hardwa
     \item \textbf{Configuration C}: An NVIDIA Tesla T4 GPU equipped with 16~GB of VRAM. The environment was configured with NVIDIA Driver version 580.82.07 and CUDA version 13.0.
 \end{itemize}
 \textbf{Configuration A} and \textbf{Configuration B} correspond to the personal computing systems of the authors, whereas \textbf{Configuration C} was provisioned using the Google Colab cloud computing platform.
-To ensure that the benchmarking results on the personal computers were not distorted by background display rendering tasks, the graphical user interface was explicitly disabled. This was achieved by executing the \texttt{sudo systemctl isolate multi-user.target} command prior to testing, thereby dedicating the GPUs exclusively to the application workloads.
-
+To ensure that the benchmarking results on the personal computers were not distorted by background display rendering tasks, the graphical user interface was explicitly disabled. This was achieved by executing, on Linux distributions that use \texttt{systemd} as \emph{init} process, the \texttt{sudo systemctl isolate multi-user.target} command prior to testing, thereby dedicating the GPUs exclusively to the application workloads.
+We will compare the results of these three configurations with the ones of the original paper, that were produced with an NVIDIA A100 equipped with 40 GB of global memory and an AMD EPIC 7302P as host. The system utilized NVIDIA Driver version 545.23.08 with CUDA 12.3.
 
 % ---------------------------------------------------------------
 \section{Results}
