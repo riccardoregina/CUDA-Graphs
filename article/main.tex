@@ -525,18 +525,19 @@ Furthermore, a key conclusion of the paper is that optimizing the graph size bec
     \label{fig:speedup}
 \end{figure*}
 
-The most interesting divergence between our reproduction and the original publication concerns the speed-up metric, as illustrated in Figure \ref{fig:speedup}. 
+Another interesting divergence between our reproduction and the original publication concerns the speed-up metric, as illustrated in Figure \ref{fig:speedup}. 
 
-For light workloads, the paper reports a speed-up of over 1.4x (peaking near 1.5x). In stark contrast, our tests demonstrate a dramatically higher speed-up for the light workload (\(10^3\) threads), stabilizing consistently between 2.3x and 2.5x. This implies that on our specific hardware platform and CUDA version, the traditional CPU-side kernel launch overhead is proportionally much slower, or that the CUDA Graph infrastructure is capable of executing nodes with significantly less latency compared to the NVIDIA A100 system tested by the authors.
+For light workloads, the paper reports a speed-up of over 1.4x (peaking near 1.5x). In contrast, our tests demonstrate a dramatically higher speed-up for the light workload (\(10^3\) threads), stabilizing consistently between 2.3x and 2.5x. 
+This is likely due to the much higher host-device latency of our tested configurations compared to the authors' one (A100 and AMD EPIC 7302P).
 
-Conversely, for the heaviest workloads (\(10^6\) and \(10^7\) threads), the authors obtained only a slight speed-up or no slowdown. Our graphs display a completely flat speed-up of exactly 1.0x for these configurations. We reach the "break-even" point, confirming the theoretical expectation: for large workloads, the kernel execution time completely dominates the launch overhead, resulting in neither apparent benefits nor penalties when using CUDA Graphs.
+For the heaviest workloads (\(10^6\) and \(10^7\) threads), the authors obtained only a slight speed-up or no slowdown. Our graphs display a completely flat speed-up of exactly 1.0x for these configurations: for large workloads, the kernel execution time completely dominates the launch overhead, resulting in neither apparent benefits nor penalties when using CUDA Graphs.
 
 % ---------------------------------------------------------------
 \section{Conclusion}
 % ---------------------------------------------------------------
 In conclusion, our reproduction fully validates the performance model formulated in the paper: the adoption of CUDA Graphs for iterative loops is effective because the transition time to the next node within a graph is strictly lower than the launch time of a new kernel from the host. 
 
-However, our results, particularly the 2.5x speed-up for light workloads, suggest that the tangible benefits of "Kernel Batching" are heavily dependent on the execution environment (e.g., host CPU, PCIe driver, and GPU architecture). If the host machine suffers from higher CPU-to-GPU latency than the high-end hardware used by the authors, bypassing the CPU via CUDA Graphs can yield performance gains that are substantially higher than those originally published.
+However, our results, particularly the 2.5x speed-up for light workloads, suggest that the tangible benefits of "Kernel Batching" are heavily dependent on the execution environment (e.g., host CPU, PCIe driver, and GPU architecture) and that, not suprisingly, this technique is more powerful on configurations with high CPU-to-GPU latency, making it very advantageous for older computing systems.
 \clearpage
 
 % ---------------------------------------------------------------
